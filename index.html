@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Project Chimera - Live Demo</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            background: #222;
+        }
+        #map { 
+            position: absolute; 
+            top: 0; 
+            bottom: 0; 
+            width: 100%; 
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+        }
+        .controls h1 { 
+            margin: 0 0 10px 0; 
+            color: #D10000;
+        }
+        .controls button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #D10000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .controls button:hover { background: #FF3333; }
+        
+        #message-box {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #f1c40f;
+            margin-top: 10px;
+        }
+
+        .action-plan {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 350px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1000;
+            border-top: 3px solid #D10000;
+            max-height: 250px;
+            overflow-y: auto;
+            display: none; 
+        }
+        .action-plan h3 { 
+            margin: 0 0 10px 0; 
+            color: #f1c40f;
+        }
+        .action-plan pre {
+            white-space: pre-wrap; 
+            font-family: inherit;
+            font-size: 0.95em;
+        }
+
+        .custom-marker {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .red-marker { background-color: #D10000; }
+        .yellow-marker { background-color: #FFFF00; }
+
+        @keyframes pulseYellow {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(255, 255, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 0, 0); }
+        }
+
+        @keyframes pulseRed {
+            0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(255, 0, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+        }
+
+        .yellow-marker.blinking {
+            animation: pulseYellow 2s infinite;
+        }
+        .red-marker.blinking {
+            animation: pulseRed 2s infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h1>Project Chimera</h1>
+        <button id="run-sim">Run AI Prediction</button>
+        <div id="message-box">Ready to simulate.</div>
+    </div>
+    
+    <div id="action-plan-box" class="action-plan">
+        <h3>AI-Generated Action Plan</h3>
+        <pre id="action-plan-text"></pre>
+    </div>
+
+    <div id='map'></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+
+    <script>
+        // --- 1. SETUP THE MAP ---
+        // Start zoomed out on the whole world
+        const map = L.map('map').setView([20, 0], 2); 
+
+        // Add the dark map tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https.carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // --- 2. CINEMATIC INTRO ANIMATION ---
+        setTimeout(() => {
+            // Fly to India
+            map.flyTo([20.5937, 78.9629], 5, { duration: 4 });
+        }, 1000); // 1 second after load
+
+        setTimeout(() => {
+            // Fly to Delhi
+            map.flyTo([28.6139, 77.2090], 11, { duration: 3 });
+        }, 5500); // 5.5 seconds after load
+        // --- END OF ANIMATION ---
+
+
+        // --- 3. GET HTML ELEMENTS ---
+        let markersLayer = L.layerGroup().addTo(map);
+        const messageBox = document.getElementById('message-box');
+        const actionPlanBox = document.getElementById('action-plan-box');
+        const actionPlanText = document.getElementById('action-plan-text');
+        
+        // --- 4. HELPER FUNCTIONS ---
+        function clearMarkers() {
+            markersLayer.clearLayers();
+        }
+
+        function addMarker(lng, lat, cssClass, popupText = null) {
+            const customIcon = L.divIcon({
+                className: `custom-marker ${cssClass}`, // <-- ✅ FIXED (Used backticks)
+                iconSize: [20, 20]
+            });
+            const marker = L.marker([lat, lng], { icon: customIcon }).addTo(markersLayer);
+            if (popupText) {
+                marker.bindPopup(popupText);
+            }
+        }
+
+        // --- 5. MAIN API CALL ---
+        document.getElementById('run-sim').addEventListener('click', () => {
+            clearMarkers();
+            messageBox.innerText = "Running AI prediction...";
+            actionPlanBox.style.display = 'none';
+
+            const disasterEvent = {
+                lat: 28.6139,
+                lng: 77.2090
+            };
+
+            fetch('http://127.0.0.1:5000/api/predict-failure', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(disasterEvent)
+            })
+            .then(response => response.json())
+            .then(data => {
+                const failing_assets = JSON.parse(data.failing_assets);
+                const action_plan = data.action_plan;
+
+                messageBox.innerText = `Prediction Complete: ${failing_assets.length} assets at risk!`; // <-- ✅ FIXED (Used backticks)
+
+                // --- ✅ FIXED: This loop is now correct ---
+                for (let asset of failing_assets) {
+                    let colorClass = '';
+                    let assetType = '';
+
+                    if (asset.asset_type === 0) {
+                        colorClass = 'yellow-marker blinking';
+                        assetType = 'Hospital';
+                    } else {
+                        colorClass = 'red-marker blinking';
+                        assetType = 'Substation';
+                    }
+
+                    const popup = `<h3>${asset.asset_name}</h3><p>Type: ${assetType}</p>`; // <-- ✅ FIXED (Used backticks)
+                    addMarker(asset.longitude, asset.latitude, colorClass, popup);
+                }
+                // ---------------------------------
+
+                actionPlanText.innerText = action_plan;
+                actionPlanBox.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                messageBox.innerText = "Error: Could not connect to backend.";
+            });
+        });
+    </script>
+
+</body>
+</html>
